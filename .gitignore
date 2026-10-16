@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.egg-info/
+outputs/
+data/
+checkpoints/
+.hf_cache/
+.env
+*.pem
+
+# local assistant guidelines (as in HAII)
+.claude/

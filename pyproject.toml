@@ -1,0 +1,25 @@
+[project]
+name = "elastic_drafter"
+version = "0.1.0"
+description = "One parallel drafter, many ranks: acceptance-weighted capacity for speculative decoding"
+requires-python = ">=3.10"
+dependencies = [
+  "torch",
+  "transformers",
+  "accelerate",
+  "datasets",
+  "numpy",
+  "scipy",
+  "pyyaml",
+  "tqdm",
+]
+
+[project.optional-dependencies]
+serve = ["vllm"]
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
