@@ -1,53 +1,129 @@
 # elastic_drafter
 
-One speculative drafter, many sizes. The drafter is a standalone parallel drafter (it fills a
-block of mask tokens in one forward pass); we factor its weights so that keeping the first *r*
-components gives a smaller drafter inside the larger one, and we choose which components come
-first by what the target accepts. What we test and why is in the scope doc (ask Steven for the
-link). This README is how to run things and what is left to do.
+In speculative decoding, a small model (the *drafter*) proposes the next few tokens, and the large
+model we want answers from (the *target*) checks all of them in one forward pass. The number of
+tokens proposed per check is the *draft length*, for example 5. The target keeps the proposed
+tokens up to the first one it disagrees with, so the output is exactly what the target would have
+written alone. The speedup depends on the *acceptance length*: the average number of tokens the
+target keeps per check.
 
-## TL;DR
+The right size of drafter depends on how busy the server is. When many requests share the GPUs,
+the target's checks dominate the time and a cheap drafter pays off; when few requests are running,
+a larger and more accurate drafter is worth its cost (the scope doc gives the evidence). We want
+one drafter that can be made cheaper at deployment. Any weight matrix can be written as a sum of
+rank-one components (its singular value decomposition, SVD), and keeping only *r* of them gives a
+cheaper matrix. The open question is which *r* components to keep. Existing methods keep the
+largest components, or the ones the drafter's own training loss depends on most. We will test a
+third choice: keep the components that the target's acceptance depends on most.
 
-1. **Get access** to the GPU machine (uk-p5): send Steven your SSH public key (the one line from
-   `cat ~/.ssh/id_ed25519.pub`) and your Andrew ID. Your GPUs and data folder are in the task board below.
-2. **Install** (on uk-p5): `git clone <repo>`, then in the folder `uv venv && source .venv/bin/activate && uv pip install -e .`
-3. **Start with T1** below, then take tasks in order unless Steven says otherwise.
+## Setup
 
-## Task board
+On uk-p5, our GPU machine, in a clone of this repo:
 
-Status: `todo`, `doing`, `done`, `blocked`. Every task has a check that passes or fails; a task is
-done when its check passes and its output is where the table says. Items marked (proposed) wait
-for Steven's decision.
+```
+uv venv
+source .venv/bin/activate
+uv pip install -e .
+```
 
-| ID | Task | Owner | Done when | Output |
-|---|---|---|---|---|
-| T0 | Access and environment on uk-p5 | student | `python -c "import elastic_drafter, torch; print(torch.cuda.device_count())"` prints your GPU count | |
-| T1 | Pick the drafter for each target (proposed: a released PARD-family drafter if one exists for Llama-3.1-8B and Qwen3-8B, otherwise train one with the Janus data pipeline) | Steven decides; student surveys | a table of candidate drafters with links, sizes and reported acceptance | `docs/drafters.md` |
-| T2 | Port the data and evaluation pieces from Janus: target-generated responses, mask-token blocks, the teacher-forced acceptance-length walk (scored over the first 1,024 generated tokens), the paired bootstrap | student, Steven reviews | the chosen drafter's acceptance length on HumanEval and MT-Bench at draft length 5 is stable across two runs to 0.01, and matches its published value where one exists | `src/elastic_drafter/eval.py`, a run folder |
-| T3 | Whitened SVD of every linear layer at a given rank fraction ([SVD-LLM](https://arxiv.org/abs/2403.07378)) | student | at full rank the factored drafter reproduces the original logits to 1e-3; at fractions 0.75, 0.5, 0.25 it loads and runs | `src/elastic_drafter/decompose.py` |
-| T4 | Loss-weighted importance: weight the decomposition by squared gradients of the drafting loss ([FWSVD](https://arxiv.org/abs/2207.00112)) on a small calibration set | student | weights computed for every linear layer; the full-rank check of T3 still passes | same |
-| T5 | Acceptance-weighted importance: the same construction with gradients of D-PACE's expected-accepted-length surrogate | Steven and student | as T4 | same |
-| T6 | The rank ladder: 3 weightings (T3, T4, T5) by 3 rank fractions, plus the uncompressed drafter, on frozen item lists and frozen target references | student | 10 run folders; one table and one plot of acceptance length against rank fraction | `outputs/runs/`, `docs/results/` |
-| T7 | Matched-compute baseline: the drafter with layers dropped to the same FLOPs as each rank fraction | student | as T6, 3 more points on the same plot | same |
-| T8 | Literature cards for the 11 papers in the scope doc: what each reads, where it acts, its numbers, and how we differ; every claim with a page or section | student | 11 cards, checked by Steven | `docs/literature/` |
+There are no scripts yet; writing the one for E1 is the first task.
 
-**Before T6 runs:** write the analysis plan into T6 (the prediction: acceptance weighting beats
-loss weighting by more as the rank shrinks; the test; what result would falsify it), and Steven signs it.
+## Choices shared by every experiment (ours)
 
-**Checkpoint after T6 and T7:** if the prediction holds, the next step is nested multi-rank
-training ([Nested Subspace Networks](https://arxiv.org/abs/2509.17874) as the substrate); if it
-does not, we decide with the numbers in hand.
+- **Targets:** [Llama-3.1-8B-Instruct](https://huggingface.co/meta-llama/Llama-3.1-8B-Instruct)
+  and [Qwen3-8B](https://huggingface.co/Qwen/Qwen3-8B).
+- **Drafters:** the released [PARD-2](https://arxiv.org/abs/2605.08632) drafters for these two
+  targets, [PARD2-Llama-3.1-8B](https://huggingface.co/amd/PARD2-Llama-3.1-8B) (1B parameters)
+  and [PARD2-Qwen3-8B](https://huggingface.co/amd/PARD2-Qwen3-8B) (0.6B). They are parallel
+  drafters: they propose all the draft tokens in one forward pass, by filling a block of
+  placeholder ("mask") tokens appended to the text.
+- **Benchmarks:** [HumanEval](https://arxiv.org/abs/2107.03374) (164 Python programming problems)
+  and [MT-Bench](https://arxiv.org/abs/2306.05685) (80 two-turn conversations), all prompts.
+- **Target responses:** generated once with greedy decoding in bf16 and saved; every experiment
+  reuses the same saved prompts and responses, so the numbers are comparable.
+- **Measuring acceptance:** offline, on the saved responses. Starting at the beginning of a
+  response, the drafter proposes the next tokens given the true text so far; we count how many
+  match the target's tokens in a row, move past them and the target's next token, and repeat, as
+  real decoding would. Responses are scored over their first 1,024 generated tokens.
+- **Calibration set:** 32 conversations from the drafters' training-data sources, never from the
+  benchmarks, each with mask tokens appended as at drafting time.
+- **Cost:** the multiply-adds of the linear layers inside the drafter's transformer blocks. The
+  embedding table and the output layer stay as they are. No experiment trains the drafter after
+  shrinking it.
+
+## Experiments
+
+E1 measures the starting point. E2 to E5 shrink the drafter in the same way and differ only in
+which components they keep. E6 shrinks it by another route, at the same cost as E2 to E5.
+
+**E1. Measure the starting drafters.**
+Generate and save the target responses, then measure each drafter's acceptance length at draft
+lengths 5 and 8, and its acceptance at each position of the draft (how often the 1st, 2nd, ...
+proposed token is kept).
+*Why:* every later experiment asks how much of this acceptance survives in a cheaper drafter.
+*Useful output:* acceptance length per target, benchmark and draft length, compared with what the
+PARD-2 paper reports for the same drafters; the saved responses that the other experiments reuse.
+
+**E2. Plain SVD.**
+Replace every linear layer's weight matrix with its *r* largest SVD components, stored as two
+thin matrices, and measure acceptance length as in E1. An *m*-by-*n* matrix kept at rank *r*
+costs *r(m+n)* multiply-adds instead of *mn*, so an *n*-by-*n* matrix is cheaper only for *r* below
+*n*/2. We choose *r* for each matrix so that it keeps 75%, 50% or 25% of its original cost.
+*Why:* this shows how much acceptance depends on the number of components kept. If acceptance
+barely drops at 25%, the choice of components matters little; if it collapses already at 75%, the
+range worth studying is small.
+*Useful output:* a plot of acceptance length against the fraction of cost kept, one line per
+target. E3 to E6 add to this plot.
+
+**E3. Whitened SVD.**
+Before the SVD, multiply each matrix by a transform computed from the inputs it receives on the
+calibration set, so that directions the inputs use often count for more; truncate; then undo the
+transform. This is [SVD-LLM](https://arxiv.org/abs/2403.07378).
+*Why:* plain truncation works poorly on language models (see SVD-LLM), so beating it would
+prove little. Whitened SVD is the fair baseline.
+*Useful output:* a second line on the plot.
+
+**E4. Loss-weighted SVD.**
+The same procedure as E3, with a different scaling: before the SVD, scale each row of a matrix by
+how strongly the drafter's training loss depends on that row's weights (the summed squared
+gradients of the loss on the calibration set); truncate; then undo the scaling. This is
+[FWSVD](https://arxiv.org/abs/2207.00112). The drafter's training loss is the cross-entropy of its
+predictions at the mask positions against the target's tokens.
+*Why:* this is the strongest existing way to choose components, and the one a new criterion has to
+beat.
+*Useful output:* a third line on the plot.
+
+**E5. Acceptance-weighted SVD.**
+The same as E4, with the gradients of the expected acceptance length in place of the training
+loss. The expected acceptance length counts, for each draft position, the probability that the
+drafter's token there and at every earlier position matches the target's; it is differentiable,
+and [D-PACE](https://arxiv.org/abs/2605.18810) gives it in closed form for parallel drafters.
+*Why:* we predict that E5 keeps more acceptance than E4, and that its lead grows as the drafter
+gets cheaper: with many components kept, both criteria keep the useful ones, and with few kept,
+the criterion decides which ones go.
+*Useful output:* a fourth line on the plot, and the gap between E5 and E4 at each cost.
+
+**E6. Dropping layers.**
+Remove whole transformer blocks from the drafter, choosing the number of blocks whose cost is
+closest to each point of E2, and measure acceptance length.
+*Why:* dropping layers is the obvious other way to make a drafter cheaper; keeping fewer components
+is only worth using if it beats it at the same cost.
+*Useful output:* three points on the plot.
+
+If E5 leads, the next step is training one drafter whose every rank works at once
+([Nested Subspace Networks](https://arxiv.org/abs/2509.17874)). If it does not, we decide with the
+numbers in hand.
 
 ## Layout
 
 ```
-src/elastic_drafter/   the package (data, eval, decompose, ...)
-configs/               one YAML per experiment
-scripts/               entry points that write run folders
-docs/                  drafters, literature cards, results notes
-outputs/, data/        git-ignored: runs, downloads, checkpoints
+src/elastic_drafter/   the package
+configs/               one YAML file per experiment
+scripts/               entry points; each run writes one folder under outputs/runs/
+docs/                  notes and results
+outputs/, data/        not in git: runs, downloads, checkpoints
 ```
 
-Each run writes `outputs/runs/<date>_<kind>_<short hash>/` with `manifest.json` (commit, config,
-seed, model IDs and revisions, item-list hash, start and end time), per-item records, and `derived/`
-tables that scripts regenerate.
+Each run folder holds `manifest.json` (commit, config, seed, model names and revisions, hash of
+the prompt list, start and end time), one record per prompt, and the tables that scripts derive
+from them.
