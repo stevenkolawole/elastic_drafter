@@ -116,14 +116,5 @@ numbers in hand.
 
 ## Layout
 
-```
-src/elastic_drafter/   the package
-configs/               one YAML file per experiment
-scripts/               entry points; each run writes one folder under outputs/runs/
-docs/                  notes and results
-outputs/, data/        not in git: runs, downloads, checkpoints
-```
-
-Each run folder holds `manifest.json` (commit, config, seed, model names and revisions, hash of
-the prompt list, start and end time), one record per prompt, and the tables that scripts derive
-from them.
+Code is in `src/elastic_drafter/`, one file per step, added as each experiment needs it. Runs write
+to `outputs/` (not in git), one folder per run with the config, the commit and the results.
