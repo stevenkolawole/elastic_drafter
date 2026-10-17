@@ -15,7 +15,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-serve = ["vllm"]
+gen = ["vllm"]
 
 [build-system]
 requires = ["setuptools>=61"]
