@@ -2,7 +2,9 @@
 __pycache__/
 *.egg-info/
 outputs/
-data/
+data/*
+!data/targets/
+data/targets/**/*_limit*
 checkpoints/
 .hf_cache/
 .env
