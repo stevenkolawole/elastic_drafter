@@ -1,7 +1,7 @@
-"""E1: measure the starting drafter.
+"""Measure a drafter's acceptance on the saved target responses.
 
-    python -m elastic_drafter.e1 --target llama
-    python -m elastic_drafter.e1 --target qwen3
+    python -m elastic_drafter.measure --target llama
+    python -m elastic_drafter.measure --target qwen3
 
 Generates the target's responses if they are not saved yet, then measures the drafter's acceptance
 length at draft lengths 5 and 8 on HumanEval and MT-Bench, and writes one folder under outputs/.
@@ -27,7 +27,7 @@ def main():
 
     commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True,
                             text=True).stdout.strip()
-    run = Path("outputs") / f"{time.strftime('%Y%m%d-%H%M%S')}_e1_{args.target}_{commit}"
+    run = Path("outputs") / f"{time.strftime('%Y%m%d-%H%M%S')}_measure_{args.target}_{commit}"
     run.mkdir(parents=True)
     drafter_name = targets.MODELS[args.target][1]
     drafter = Drafter(drafter_name)
@@ -49,7 +49,7 @@ def main():
                   f"{summary['ci95']}, per position {summary['per_position']}")
 
     meta = json.loads(targets.path(args.target, args.benchmarks[0]).with_suffix(".meta.json").read_text())
-    manifest = {"experiment": "e1", "commit": commit, "target": meta["target"],
+    manifest = {"commit": commit, "target": meta["target"],
                 "drafter": drafter_name, "mode": "target-independent", "args": vars(args),
                 "results": results}
     (run / "manifest.json").write_text(json.dumps(manifest, indent=2))

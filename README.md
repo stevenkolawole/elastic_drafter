@@ -29,9 +29,9 @@ uv pip install -e ".[gen]"      # gen adds vLLM, used once per target to generat
 Run E1 for each target (the first run generates and saves the target's responses under `data/`):
 
 ```
-python -m elastic_drafter.e1 --target llama
-python -m elastic_drafter.e1 --target qwen3
-python -m elastic_drafter.e1 --target llama --limit 5    # a quick try on 5 prompts
+python -m elastic_drafter.measure --target llama
+python -m elastic_drafter.measure --target qwen3
+python -m elastic_drafter.measure --target llama --limit 5    # a quick try on 5 prompts
 ```
 
 Each run prints the acceptance lengths and writes a folder under `outputs/` with the per-step
@@ -71,7 +71,7 @@ E1 is built; read the code in this order before running it, since every later ex
    AMD's reference code (the check in E1 below).
 4. `acceptance.py`: how a saved response is replayed step by step. Watch the per-position
    acceptance: it should fall from the 1st draft position to the *k*-th.
-5. `e1.py`: ties them together and writes the run folder.
+5. `measure.py`: ties them together and writes the run folder.
 
 ## Experiments
 
@@ -153,7 +153,7 @@ numbers in hand.
 | `drafter.py` | loads a PARD-2 drafter and proposes *k* tokens in one forward pass |
 | `acceptance.py` | replays speculative decoding on the saved responses: acceptance length, acceptance per position, bootstrap interval |
 | `lowrank.py` | replaces linear layers with low-rank factors at a given fraction of cost, with the scalings of E2 to E5; `python -m elastic_drafter.lowrank` runs its checks |
-| `e1.py` | E1 end to end |
+| `measure.py` | measures a drafter's acceptance on the saved responses and writes a run folder (E1; later experiments reuse it on shrunk drafters) |
 
 Files for E2 onward are added when those experiments start. Runs write to `outputs/` and data to
 `data/`; neither is in git.
