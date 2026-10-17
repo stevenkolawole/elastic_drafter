@@ -23,7 +23,7 @@ On uk-p5, our GPU machine, in a clone of this repo:
 ```
 uv venv
 source .venv/bin/activate
-uv pip install -e ".[gen]"      # gen adds vLLM, used once per target to generate its responses
+uv pip install -e .
 ```
 
 Run E1 for each target (the first run generates and saves the target's responses under `data/`):
@@ -149,7 +149,7 @@ numbers in hand.
 | File | What it does |
 |---|---|
 | `data.py` | HumanEval and MT-Bench prompts with stable IDs, in the chat format PARD evaluates with |
-| `targets.py` | generates each target's greedy responses once (vLLM) and saves them under `data/targets/` |
+| `targets.py` | generates each target's greedy responses once (Hugging Face Transformers, bf16) and saves them under `data/targets/` |
 | `drafter.py` | loads a PARD-2 drafter and proposes *k* tokens in one forward pass |
 | `acceptance.py` | replays speculative decoding on the saved responses: acceptance length, acceptance per position, bootstrap interval |
 | `lowrank.py` | replaces linear layers with low-rank factors at a given fraction of cost, with the scalings of E2 to E5; `python -m elastic_drafter.lowrank` runs its checks |
@@ -157,3 +157,15 @@ numbers in hand.
 
 Files for E2 onward are added when those experiments start. Runs write to `outputs/` and data to
 `data/`; neither is in git.
+
+## Decisions
+
+| Question | Options | Now | Status |
+|---|---|---|---|
+| How to generate the target responses | Hugging Face Transformers, or vLLM | Transformers: the responses are generated once, and nothing before end-to-end speed measurements needs vLLM | decided for now; vLLM returns for speedups at the end |
+| Which mode of the PARD-2 drafter | target-independent (tokens only), or target-dependent (adds a projection of the target's hidden states) | target-independent: the cleanest test of which components to keep, since the target's states are not shrunk | decided for now; the headline comparison is repeated target-dependent later |
+| The loss behind E4 | plain cross-entropy at the mask positions, or the drafter's own training loss | plain cross-entropy, as FWSVD uses the drafting loss | decided |
+| Whether cost counts the output layer and embeddings | only the linear layers in the transformer blocks, or also the output layer (about a quarter of a 1B drafter with a 128K vocabulary) | blocks only | open |
+| HumanEval set | all 164 problems, or the 80 in PARD's evaluation file (comparable with their numbers) | all 164 | open |
+| Calibration set | which conversations, and how many | 32 from the drafters' training-data sources | open: the exact source |
+| Changing the rank per request in a serving engine | | | deferred (mixed ranks in one batch give irregular shapes) |
