@@ -60,6 +60,19 @@ records and a `manifest.json` (commit, models, settings, results).
   embedding table and the output layer stay as they are. No experiment trains the drafter after
   shrinking it.
 
+## How E1 works, and what to watch
+
+E1 is built; read the code in this order before running it, since every later experiment reuses it.
+
+1. `data.py`: the prompts. Watch that IDs stay the same between runs (`items_hash`).
+2. `targets.py`: the target's responses, generated once and saved. Every comparison uses these
+   same saved responses; never regenerate them in the middle of a set of experiments.
+3. `drafter.py`: how a PARD drafter proposes *k* tokens in one pass. Watch that its tokens match
+   AMD's reference code (the check in E1 below).
+4. `acceptance.py`: how a saved response is replayed step by step. Watch the per-position
+   acceptance: it should fall from the 1st draft position to the *k*-th.
+5. `e1.py`: ties them together and writes the run folder.
+
 ## Experiments
 
 E1 measures the starting point. E2 to E5 shrink the drafter in the same way and differ only in
