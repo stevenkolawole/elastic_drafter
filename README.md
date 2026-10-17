@@ -168,4 +168,5 @@ Files for E2 onward are added when those experiments start. Runs write to `outpu
 | Whether cost counts the output layer and embeddings | only the linear layers in the transformer blocks, or also the output layer (about a quarter of a 1B drafter with a 128K vocabulary) | blocks only | open |
 | HumanEval set | all 164 problems, or the 80 in PARD's evaluation file (comparable with their numbers) | all 164 | open |
 | Calibration set | which conversations, and how many | 32 from the drafters' training-data sources | open: the exact source |
+| Where saved target responses and run outputs live | local `data/` and `outputs/` only, or a private Hugging Face repo both of us can pull from | local for now | to do: Steven sets up a private Hugging Face repo for our data |
 | Changing the rank per request in a serving engine | | | deferred (mixed ranks in one batch give irregular shapes) |
