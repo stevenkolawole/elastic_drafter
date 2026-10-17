@@ -15,7 +15,8 @@ from transformers import AutoConfig, AutoModelForCausalLM
 
 
 class Drafter:
-    def __init__(self, path, device="cuda", dtype=torch.bfloat16):
+    def __init__(self, path, device=None, dtype=torch.bfloat16):
+        device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self.model = AutoModelForCausalLM.from_pretrained(path, torch_dtype=dtype).to(device).eval()
         self.mask_id = AutoConfig.from_pretrained(path).pard_token
         self.device = device
