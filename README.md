@@ -39,7 +39,7 @@ uv run python -m elastic_drafter.measure --target llama
 ```
 
 The first run per target generates and saves the target's responses under `data/`; later runs
-reuse them. Each run prints the acceptance lengths and writes a folder under `outputs/` with the
+reuse them. A run that is stopped picks up where it left off when started again. Each run prints the acceptance lengths and writes a folder under `outputs/` with the
 per-step records and a `manifest.json` (commit, models, settings, results).
 
 ### What each step needs
@@ -52,23 +52,6 @@ per-step records and a `manifest.json` (commit, models, settings, results).
 
 Generating the responses is the only step that needs a 24 GB card. Once they are saved (and shared,
 see Decisions), every experiment up to E6 runs on a 16 GB card.
-
-### On Babel (CMU)
-
-Babel runs everything as batch jobs. GPU jobs go to the `general` partition with `sbatch` (it
-rejects `srun` and CPU-only jobs); pin the card type, since `general` mixes several; and keep large
-files under `/data/user_data/$USER`, which exists only on compute nodes, not on the login node:
-
-```
-sbatch --partition=general --gres=gpu:1 --constraint=L40S --time=08:00:00 --mem=64G \
-  --job-name=measure-qwen3 --output=measure-%j.log \
-  --wrap="cd ~/elastic_drafter && export HF_HOME=/data/user_data/$USER/hf && \
-          uv run python -c 'import torch; assert torch.cuda.is_available()' && \
-          uv run python -m elastic_drafter.measure --target qwen3"
-```
-
-Check a job with `squeue -u $USER` and read its log with `tail measure-<jobid>.log`. On uk-p5 the
-same commands run directly in a terminal.
 
 ## Choices shared by every experiment (ours)
 

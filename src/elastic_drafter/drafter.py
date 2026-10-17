@@ -23,7 +23,7 @@ class Drafter:
 
     def logits(self, context_ids, k):
         """Logits for the next k positions after `context_ids` (a list of token IDs), shape [k, vocab].
-        Runs with gradients enabled when the caller enables them (E4 and E5 need them)."""
+        Gradients flow when the caller enables them."""
         ids = torch.tensor([list(context_ids) + [self.mask_id] * (k - 1)], device=self.device)
         return self.model(input_ids=ids).logits[0, -k:].float()
 

@@ -6,11 +6,11 @@ factors are cheaper only when r < m*n / (m+n), which is n/2 for a square matrix.
 choose r from the fraction of cost to keep, not from a fraction of the rank.
 
 Which r components to keep is set by a scaling applied before the SVD and removed after it:
-  - none: plain truncated SVD (README E2);
+  - none: plain truncated SVD;
   - `right`, an n-by-n matrix: the Cholesky factor of the second-moment matrix of the layer's
-    inputs, i.e. whitened SVD (SVD-LLM, https://arxiv.org/abs/2403.07378; E3);
+    inputs, i.e. whitened SVD (SVD-LLM, https://arxiv.org/abs/2403.07378);
   - `row_scale`, a length-m vector: the square root of each output row's importance, e.g. summed
-    squared gradients of a loss (FWSVD, https://arxiv.org/abs/2207.00112; E4 and E5).
+    squared gradients of a loss (FWSVD, https://arxiv.org/abs/2207.00112).
 """
 import torch
 from torch import nn
@@ -34,7 +34,7 @@ def factor(W, r, row_scale=None, right=None):
     A = root[:, None] * Vh[:r]
     if row_scale is not None:
         B = B / row_scale.float()[:, None]
-    if right is not None:  # A <- A right^{-1}
+    if right is not None:
         A = torch.linalg.solve(right.float().T, A.T).T
     return A.to(W.dtype), B.to(W.dtype)
 
@@ -85,8 +85,8 @@ def shrink(model, fraction, scales=None):
 
 
 if __name__ == "__main__":
-    # Checks that pass or fail: full-rank factors reproduce W under every scaling, and shrinking a
-    # small random Llama keeps the requested fraction of cost and still runs.
+    """Checks: full-rank factors reproduce W under every scaling, and a small random Llama shrunk to
+    half its cost keeps that fraction and still runs."""
     torch.manual_seed(0)
     W = torch.randn(64, 48)
     X = torch.randn(500, 48)

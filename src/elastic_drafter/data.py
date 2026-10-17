@@ -1,19 +1,21 @@
-"""Benchmark prompts with stable IDs, and the chat format the drafters were evaluated with."""
+"""Benchmark prompts with stable IDs, in the chat format PARD evaluates with: a fixed system prompt
+and thinking disabled (https://github.com/AMD-AIG-AIMA/PARD, pard/pard2_infer.py)."""
 import hashlib
 import json
 from dataclasses import dataclass
 
 from datasets import load_dataset
 
-# PARD evaluates with this system prompt and thinking disabled
-# (https://github.com/AMD-AIG-AIMA/PARD, pard/pard2_infer.py, get_input).
 SYSTEM = "You are a helpful assistant."
 
 
 @dataclass(frozen=True)
 class Item:
-    id: str        # "<benchmark>:<original id>", the same in every run
-    turns: tuple   # the user's messages, in order
+    """One prompt: `id` is "<benchmark>:<original id>", the same in every run; `turns` are the
+    user's messages, in order."""
+
+    id: str
+    turns: tuple
 
 
 def humaneval():
@@ -58,3 +60,16 @@ def chat_ids(tokenizer, turns, responses=()):
     text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True,
                                          enable_thinking=False)
     return tokenizer(text, add_special_tokens=False).input_ids
+
+
+def read_complete_lines(path):
+    """Records of a JSON-lines file that a killed run may have left half-written: keeps the complete
+    lines, rewrites the file with only those, and returns them."""
+    rows = []
+    for line in path.read_text().splitlines():
+        try:
+            rows.append(json.loads(line))
+        except json.JSONDecodeError:
+            break
+    path.write_text("".join(json.dumps(r) + "\n" for r in rows))
+    return rows

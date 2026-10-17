@@ -4,16 +4,16 @@
     python -m elastic_drafter.measure --target qwen3
 
 Generates the target's responses if they are not saved yet, then measures the drafter's acceptance
-length at draft lengths 5 and 8 on HumanEval and MT-Bench, and writes one folder under outputs/.
+length at draft lengths 5 and 8 on HumanEval and MT-Bench, and writes one folder under outputs/. Started again after it is stopped, it continues in the same
+folder and skips the responses already measured.
 """
 import argparse
 import json
 import subprocess
-import time
 from collections import defaultdict
 from pathlib import Path
 
-from . import acceptance, targets
+from . import acceptance, data, targets
 from .drafter import Drafter
 
 
@@ -27,8 +27,8 @@ def main():
 
     commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True,
                             text=True).stdout.strip()
-    run = Path("outputs") / f"{time.strftime('%Y%m%d-%H%M%S')}_measure_{args.target}_{commit}"
-    run.mkdir(parents=True)
+    run = Path("outputs") / (f"measure_{args.target}_{commit}" + (f"_limit{args.limit}" if args.limit else ""))
+    run.mkdir(parents=True, exist_ok=True)
     drafter_name = targets.MODELS[args.target][1]
     drafter = Drafter(drafter_name)
     results = {}
@@ -37,11 +37,20 @@ def main():
         records = targets.load(args.target, bench)[:args.limit]
         for k in args.k:
             by_item = defaultdict(list)
-            with (run / f"steps_{bench}_k{k}.jsonl").open("w") as f:
+            steps_file = run / f"steps_{bench}_k{k}.jsonl"
+            measured = set()
+            if steps_file.exists():
+                for row in data.read_complete_lines(steps_file):
+                    measured.add((row["id"], row["turn"]))
+                    by_item[row["id"]].extend(tuple(s) for s in row["steps"])
+            with steps_file.open("a") as f:
                 for r in records:
+                    if (r["id"], r["turn"]) in measured:
+                        continue
                     steps = acceptance.walk(drafter, r["prompt_ids"], r["response_ids"], k)
                     by_item[r["id"]].extend(steps)
                     f.write(json.dumps({"id": r["id"], "turn": r["turn"], "steps": steps}) + "\n")
+                    f.flush()
             summary = acceptance.summarize([s for steps in by_item.values() for s in steps], k)
             summary["ci95"] = acceptance.bootstrap(list(by_item.values()))
             results[f"{bench}_k{k}"] = summary
