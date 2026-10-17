@@ -32,11 +32,8 @@ def mtbench():
     return [Item(f"mtbench:{r['prompt_id']}", tuple(r["prompt"])) for r in rows]
 
 
-BENCHMARKS = {"humaneval": humaneval, "mtbench": mtbench}
-
-
 def load(benchmark):
-    return BENCHMARKS[benchmark]()
+    return {"humaneval": humaneval, "mtbench": mtbench}[benchmark]()
 
 
 def items_hash(items):
@@ -62,14 +59,12 @@ def chat_ids(tokenizer, turns, responses=()):
     return tokenizer(text, add_special_tokens=False).input_ids
 
 
-def read_complete_lines(path):
-    """Records of a JSON-lines file that a killed run may have left half-written: keeps the complete
-    lines, rewrites the file with only those, and returns them."""
+def read_jsonl(path):
+    """Records of a JSON-lines file; a line that a stopped run left half-written is skipped."""
     rows = []
-    for line in path.read_text().splitlines():
+    for line in path.open():
         try:
             rows.append(json.loads(line))
         except json.JSONDecodeError:
-            break
-    path.write_text("".join(json.dumps(r) + "\n" for r in rows))
+            pass
     return rows
