@@ -63,7 +63,7 @@ files under `/data/user_data/$USER`, which exists only on compute nodes, not on 
 sbatch --partition=general --gres=gpu:1 --constraint=L40S --time=08:00:00 --mem=64G \
   --job-name=measure-qwen3 --output=measure-%j.log \
   --wrap="cd ~/elastic_drafter && export HF_HOME=/data/user_data/$USER/hf && \
-          python -c 'import torch; assert torch.cuda.is_available()' && \
+          uv run python -c 'import torch; assert torch.cuda.is_available()' && \
           uv run python -m elastic_drafter.measure --target qwen3"
 ```
 
